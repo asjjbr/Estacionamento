@@ -1,6 +1,6 @@
 #include <SPI.h>
 #include <UIPEthernet.h>
-#include <PubSubClient2.h>
+#include <PubSubClient.h>
 #include <LiquidCrystal.h>
 
 #define RS 12
