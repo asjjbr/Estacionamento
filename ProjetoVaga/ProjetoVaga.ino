@@ -39,14 +39,14 @@ int blinkLedStatus = LOW;
 unsigned long lastConnectAttempt = 0;
 
 #define DISTANCIA 30
-//#define HISTERESE 1
+#define HISTERESE 1
 
 #ifndef HISTERESE
   #define MIN_DIST DISTANCIA
   #define MAX_DIST MIN_DIST
 #else
   #define MIN_DIST DISTANCIA
-  #define MAX_DIST DISTANCIA+3
+  #define MAX_DIST DISTANCIA+10
 #endif
 
 #define VAGA_OCUPADA 0x01
@@ -55,10 +55,10 @@ unsigned long lastConnectAttempt = 0;
 // Dados do servidor e tópico MQTT
 #define MQTT_SERVER "m14.cloudmqtt.com"
 #define MQTT_ID "Magal"
-#define MQTT_USER "zmxkveoy"
-#define MQTT_PASSWORD "bc3_sMk2m_1u"
+#define MQTT_USER "asjjbr"
+#define MQTT_PASSWORD "1234"
 #define MQTT_PORT 11222
-#define MQTT_TOPIC "senai-code-xp/vagas/kit36"
+#define MQTT_TOPIC "senai-code-xp/vagas/1"
 
 int vagaStateMachine = VAGA_LIVRE;
 char vagaStatus = '1';
@@ -70,7 +70,7 @@ void callback(char *topic, byte *payload, unsigned int length);
 EthernetClient ethClient;
 
 // Dados do MQTT Cloud
-PubSubClient client("m14.cloudmqtt.com", MQTT_PORT, callback, ethClient);
+PubSubClient client(MQTT_SERVER, MQTT_PORT, callback, ethClient);
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
@@ -103,7 +103,7 @@ void setup() {
   #ifndef OFFLINE
   digitalWrite(STATUSLEDYELLOW, HIGH);
   lastConnectAttempt = millis();
-  if (client.connect("Magal", "zmxkveoy", "bc3_sMk2m_1u"))
+  if (client.connect(MQTT_ID, MQTT_USER, MQTT_PASSWORD))
   {
     // Conecta no topic para receber mensagens
     client.subscribe(MQTT_TOPIC);
