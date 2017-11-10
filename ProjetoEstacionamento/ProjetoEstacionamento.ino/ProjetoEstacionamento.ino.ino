@@ -10,10 +10,10 @@ AsyncDelay delay_update;
 #define UPDATE_TIME 10000
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xF1, 0xff }; // Endereço MAC utilizado na placa Ethernet
-const int rs = 9, en = 8, d4 = 6, d5 = 5, d6 = 4, d7 = 3; // Pinos de conexão do LCD
+const byte rs = 9, en = 8, d4 = 6, d5 = 5, d6 = 4, d7 = 3; // Pinos de conexão do LCD
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-const int TOTAL_VAGAS = 10; // Total de vagas do estacionamento
+const byte TOTAL_VAGAS = 10; // Total de vagas do estacionamento
 #define POSICAO_TEXTO1 10 // Posição de escrita do número de vagas livres/ocupadas
 #define POSICAO_TEXTO2 10
 
@@ -25,24 +25,24 @@ const int TOTAL_VAGAS = 10; // Total de vagas do estacionamento
 
 #define NUM_PISCADAS 10 // Define quantas vezes o led de sinalização de comunicação MQTT irá piscar para cada mensagem
 
-int blinkLed = LOW;
-int contador = NUM_PISCADAS;
-unsigned long tempo = NUM_PISCADAS;
-unsigned long tempoinicial = 0;
-int blinkLedStatus = LOW;
+byte blinkLed = LOW;
+byte contador = NUM_PISCADAS;
+AsyncDelay delay_blink;
+byte blinkLedStatus = LOW;
+#define BLINK_TIME 100
 
 #define CONNECTED 0x00
 #define DISCONNECTED 0x01
-int mqttStateMachine;
+byte mqttStateMachine;
 #define RECONNECT_TIME 5000 // Intervalo de tempo entre tentativas de reconexão ao servidor MQTT
-unsigned long lastConnectAttempt = 0;
+AsyncDelay delay_reconnect;
 
-int qntVagasLivres = 0;
-int qntVagasOcupadas = 0;
-int totalVagas = 0;
+byte qntVagasLivres = 0;
+byte qntVagasOcupadas = 0;
+byte totalVagas = 0;
 
-int vagas[TOTAL_VAGAS]; // Nesse vetor é registrado o status de cada vaga do estacionamento, vagas[i-1]=1 indica que vaga a vaga i está livre, 0 indica que a vaga i está ocupada
-int linkStatus[TOTAL_VAGAS];
+byte vagas[TOTAL_VAGAS]; // Nesse vetor é registrado o status de cada vaga do estacionamento, vagas[i-1]=1 indica que vaga a vaga i está livre, 0 indica que a vaga i está ocupada
+byte linkStatus[TOTAL_VAGAS];
 void callback(char *topic, byte *payload, unsigned int length);
 
 EthernetClient ethClient;
@@ -99,7 +99,8 @@ void callback(char *topic, byte *payload, unsigned int length)
       }
     }
     blinkLed = HIGH;
-    tempoinicial = millis();
+    delay_blink.expire();
+    delay_blink.repeat();
     contador += NUM_PISCADAS;
   }
 }
@@ -133,7 +134,6 @@ void setup() {
   client.setCallback(callback);
   
   digitalWrite(STATUSLEDYELLOW, HIGH);
-  lastConnectAttempt = millis();
   Serial.println("Iniciando a Ethernet");
   Ethernet.begin(mac);
   Serial.println("Conectando MQTT...");
@@ -154,12 +154,14 @@ void setup() {
     digitalWrite(STATUSLEDRED, HIGH);
   }
   delay_update.start(UPDATE_TIME, AsyncDelay::MILLIS);
+  delay_blink.start(BLINK_TIME, AsyncDelay::MILLIS);
+  delay_reconnect.start(RECONNECT_TIME, AsyncDelay::MILLIS);
 }
 
 void loop() {
   client.loop();
-  int aux1 = qntVagasLivres;
-  int aux2 = qntVagasOcupadas;
+  byte aux1 = qntVagasLivres;
+  byte aux2 = qntVagasOcupadas;
   totalVagas = atualizaTotalVagas();
   qntVagasLivres = atualizaVagasLivres();
   qntVagasOcupadas = atualizaVagasOcupadas(totalVagas);
@@ -180,13 +182,13 @@ void loop() {
         mqttStateMachine = DISCONNECTED; // Caso o servidor esteja offline, muda o estado da máquina para desconectado
         digitalWrite(STATUSLEDGREEN, LOW); // Apaga o led verde
         digitalWrite(STATUSLEDRED, HIGH); // Acende o led vermelho
-        lastConnectAttempt = 0;
+        delay_reconnect.expire();
+        delay_reconnect.repeat();
       }
       break;
     case DISCONNECTED:
-      if (millis() - lastConnectAttempt > RECONNECT_TIME) { // Caso o estado atual seja desconectado e o intervalo entre conexões tenha passado, tenta reconectar
+      if (delay_reconnect.isExpired()) { // Caso o estado atual seja desconectado e o intervalo entre conexões tenha passado, tenta reconectar
         digitalWrite(STATUSLEDYELLOW, HIGH);
-        lastConnectAttempt = millis(); // Registra a hora da tentativa de reconexão
         if (client.connect(MQTT_ID)){
           // Se a conexão foi bem sucedida, assina o topic para receber/enviar mensagens
           client.subscribe(MQTT_TOPIC);
@@ -195,6 +197,8 @@ void loop() {
           digitalWrite(STATUSLEDGREEN, HIGH); // Acende o led verde
           digitalWrite(STATUSLEDRED, LOW); // Apaga o led vermelho
         }
+        delay_reconnect.expire();
+        delay_reconnect.repeat();
         digitalWrite(STATUSLEDYELLOW, LOW);
       }
       break;
@@ -207,18 +211,18 @@ void loop() {
       digitalWrite(STATUSLEDYELLOW, blinkLed);
     }
     else{
-      if(millis() - tempoinicial > tempo){
+      if(delay_blink.isExpired()){
         blinkLedStatus = !blinkLedStatus;
         digitalWrite(STATUSLEDYELLOW, blinkLedStatus);
-        tempoinicial = millis();
+        delay_blink.repeat();
         contador--;
       }
     }
   }
 }
 
-int atualizaVagasLivres() {
-  int aux = 0;
+byte atualizaVagasLivres() {
+  byte aux = 0;
   for (int i = 0; i < TOTAL_VAGAS; i++) {
     aux += (vagas[i]*linkStatus[i]);
   }
@@ -228,8 +232,8 @@ int atualizaVagasLivres() {
   return aux;
 }
 
-int atualizaVagasOcupadas(int total) {
-  int aux = 0;
+byte atualizaVagasOcupadas(byte total) {
+  byte aux = 0;
   for (int i = 0; i < TOTAL_VAGAS; i++) {
     aux += (vagas[i]*linkStatus[i]);
   }
@@ -240,8 +244,8 @@ int atualizaVagasOcupadas(int total) {
   return aux;
 }
 
-int atualizaTotalVagas(){
-  int aux = 0;
+byte atualizaTotalVagas(){
+  byte aux = 0;
   for (int i = 0; i < TOTAL_VAGAS; i++) {
     aux += linkStatus[i];
   }
@@ -251,7 +255,7 @@ int atualizaTotalVagas(){
   return aux;
 }
 
-void refreshLCD(int livres, int ocupadas){
+void refreshLCD(byte livres, byte ocupadas){
   if(livres > 0){
     
     lcd.setCursor(0, 0);
