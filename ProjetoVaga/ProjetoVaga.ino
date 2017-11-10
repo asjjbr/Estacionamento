@@ -103,7 +103,7 @@ void setup() {
   #ifndef OFFLINE
   digitalWrite(STATUSLEDYELLOW, HIGH);
   lastConnectAttempt = millis();
-  if (client.connect(MQTT_ID, MQTT_USER, MQTT_PASSWORD))
+  if (client.connect(MQTT_ID, MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC, 0, true, ""))
   {
     // Conecta no topic para receber mensagens
     client.subscribe(MQTT_TOPIC);
@@ -173,7 +173,7 @@ void loop() {
         Serial.println("Tentando conectar");
         digitalWrite(STATUSLEDYELLOW, HIGH);
         lastConnectAttempt = millis(); // Registra a hora da tentativa de reconexão
-        if (client.connect(MQTT_ID, MQTT_USER, MQTT_PASSWORD)){
+        if (client.connect(MQTT_ID, MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC, 0, true, "")){
           Serial.println("Conectado");
           // Se a conexão foi bem sucedida, assina o topic para receber/enviar mensagens
           client.subscribe(MQTT_TOPIC);

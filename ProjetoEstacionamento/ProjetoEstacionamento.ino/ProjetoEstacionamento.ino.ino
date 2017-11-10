@@ -9,11 +9,11 @@
 AsyncDelay delay_update;
 #define UPDATE_TIME 10000
 
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xF1, 0x35 }; // Endereço MAC utilizado na placa Ethernet
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xF1, 0xff }; // Endereço MAC utilizado na placa Ethernet
 const int rs = 9, en = 8, d4 = 6, d5 = 5, d6 = 4, d7 = 3; // Pinos de conexão do LCD
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-const int TOTAL_VAGAS = 3; // Total de vagas do estacionamento
+const int TOTAL_VAGAS = 10; // Total de vagas do estacionamento
 #define POSICAO_TEXTO1 10 // Posição de escrita do número de vagas livres/ocupadas
 #define POSICAO_TEXTO2 10
 
@@ -48,14 +48,15 @@ void callback(char *topic, byte *payload, unsigned int length);
 EthernetClient ethClient;
 
 // Dados do MQTT Cloud
-#define MQTT_SERVER "m14.cloudmqtt.com"
-#define MQTT_ID "Magal"
-#define MQTT_USER "asjjbr"
-#define MQTT_PASSWORD "1234"
-#define MQTT_PORT 11222
+IPAddress server(192,168,3,186);
+#define MQTT_ID "kit36"
+#define MQTT_USER ""
+#define MQTT_PASSWORD ""
+#define MQTT_PORT 1883
 #define MQTT_TOPIC "vagas/#"
 
-PubSubClient client(MQTT_SERVER, MQTT_PORT, callback, ethClient);
+//PubSubClient client(myIP, MQTT_PORT, callback, ethClient);
+PubSubClient client(ethClient);
 void callback(char *topic, byte *payload, unsigned int length)
 {
   delay_update.expire();
@@ -64,26 +65,38 @@ void callback(char *topic, byte *payload, unsigned int length)
   int topicSize = 0;
   for(int i = 0;topic[i]!=0; i++)
     topicSize = i + 1;
-
+  
+  int valor = 0;
+  if(topicSize<=8){
   // Converte os caracteres que indicam o número da vaga em inteiro
   int i = 6;
-  int valor = 0;
+  valor = 0;
   while(i < topicSize){
     valor *= 10;
+    unsigned int aux = (int)topic[i]-48;
+    if (aux>9){
+      valor = TOTAL_VAGAS+50;
+      break;
+    }
     valor += (int)topic[i]-48;
     i++;
   }
   valor--;
-
+  }
+  else{
+    valor = TOTAL_VAGAS;
+  }
   // atualiza o status da vaga i
   if(valor<TOTAL_VAGAS){
-    if(length){
+    if(length==1){
       vagas[valor] = (int)payload[0]-48;
       linkStatus[valor] = 1;
     }
     else{
-      vagas[valor] = 0;
-      linkStatus[valor] = 0;
+      if(length==0){
+        vagas[valor] = 0;
+        linkStatus[valor] = 0;
+      }
     }
     blinkLed = HIGH;
     tempoinicial = millis();
@@ -115,19 +128,26 @@ void setup() {
     vagas[i] = 0;
     linkStatus[i] = 0;
   }
+
+  client.setServer(server, MQTT_PORT);
+  client.setCallback(callback);
+  
   digitalWrite(STATUSLEDYELLOW, HIGH);
   lastConnectAttempt = millis();
+  Serial.println("Iniciando a Ethernet");
   Ethernet.begin(mac);
-  if (client.connect(MQTT_ID, MQTT_USER, MQTT_PASSWORD)) {
-   
+  Serial.println("Conectando MQTT...");
+  if (client.connect(MQTT_ID)){//, MQTT_USER, MQTT_PASSWORD)) {
+
+   Serial.println("MQTT conectado");
     // Conecta no topic para receber mensagens
-    client.subscribe("senai-code-xp/vagas/#");
+    client.subscribe(MQTT_TOPIC);
 
     mqttStateMachine = CONNECTED;
     digitalWrite(STATUSLEDGREEN, HIGH);
     digitalWrite(STATUSLEDRED, LOW);
   } else {
-    
+    Serial.println("Falha na conexão");
 
     mqttStateMachine = DISCONNECTED;
     digitalWrite(STATUSLEDGREEN, LOW);
@@ -167,7 +187,7 @@ void loop() {
       if (millis() - lastConnectAttempt > RECONNECT_TIME) { // Caso o estado atual seja desconectado e o intervalo entre conexões tenha passado, tenta reconectar
         digitalWrite(STATUSLEDYELLOW, HIGH);
         lastConnectAttempt = millis(); // Registra a hora da tentativa de reconexão
-        if (client.connect(MQTT_ID, MQTT_USER, MQTT_PASSWORD)) {
+        if (client.connect(MQTT_ID)){
           // Se a conexão foi bem sucedida, assina o topic para receber/enviar mensagens
           client.subscribe(MQTT_TOPIC);
 
