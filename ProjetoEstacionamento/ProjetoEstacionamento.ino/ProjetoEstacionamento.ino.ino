@@ -1,4 +1,3 @@
-
 #include <LiquidCrystal.h>
 #include <SPI.h>
 #include <UIPEthernet.h>
@@ -13,7 +12,7 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xF1, 0xff }; // Endereço MAC utilizado 
 const byte rs = 9, en = 8, d4 = 6, d5 = 5, d6 = 4, d7 = 3; // Pinos de conexão do LCD
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-const byte TOTAL_VAGAS = 10; // Total de vagas do estacionamento
+const byte TOTAL_VAGAS = 100; // Total de vagas do estacionamento
 #define POSICAO_TEXTO1 10 // Posição de escrita do número de vagas livres/ocupadas
 #define POSICAO_TEXTO2 10
 
@@ -22,6 +21,7 @@ const byte TOTAL_VAGAS = 10; // Total de vagas do estacionamento
 #define STATUSLEDYELLOW A3 // O led azul de status da conexão MQTT está no pino A3
 
 #define APAGALCD 7 // Pino que controla o brilho do LCD
+#define LCDBUTTON A2
 
 #define NUM_PISCADAS 10 // Define quantas vezes o led de sinalização de comunicação MQTT irá piscar para cada mensagem
 
@@ -107,7 +107,7 @@ void callback(char *topic, byte *payload, unsigned int length)
 
 void setup() {
 
-  Serial.begin(9600);
+  //Serial.begin(9600);
 
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
@@ -120,6 +120,7 @@ void setup() {
   pinMode(STATUSLEDGREEN, OUTPUT);
   pinMode(STATUSLEDYELLOW, OUTPUT);
   pinMode(APAGALCD, OUTPUT);
+  pinMode(LCDBUTTON, INPUT);
   digitalWrite(STATUSLEDRED, HIGH);
   digitalWrite(STATUSLEDGREEN, LOW);
   digitalWrite(STATUSLEDYELLOW, LOW);
@@ -134,12 +135,9 @@ void setup() {
   client.setCallback(callback);
   
   digitalWrite(STATUSLEDYELLOW, HIGH);
-  Serial.println("Iniciando a Ethernet");
   Ethernet.begin(mac);
-  Serial.println("Conectando MQTT...");
   if (client.connect(MQTT_ID)){//, MQTT_USER, MQTT_PASSWORD)) {
 
-   Serial.println("MQTT conectado");
     // Conecta no topic para receber mensagens
     client.subscribe(MQTT_TOPIC);
 
@@ -147,8 +145,7 @@ void setup() {
     digitalWrite(STATUSLEDGREEN, HIGH);
     digitalWrite(STATUSLEDRED, LOW);
   } else {
-    Serial.println("Falha na conexão");
-
+    
     mqttStateMachine = DISCONNECTED;
     digitalWrite(STATUSLEDGREEN, LOW);
     digitalWrite(STATUSLEDRED, HIGH);
@@ -169,11 +166,17 @@ void loop() {
   if (aux1!=qntVagasLivres || aux2!=qntVagasOcupadas)
     refreshLCD(qntVagasLivres, qntVagasOcupadas);
 
+  if (digitalRead(LCDBUTTON) == HIGH){
+    delay_update.expire();
+    delay_update.repeat();
+  }
   if (delay_update.isExpired()){
     lcd.noDisplay();
+    digitalWrite(APAGALCD, HIGH);
   }
   else{
     lcd.display();
+    digitalWrite(APAGALCD, LOW);
   }
  
   switch (mqttStateMachine) {
@@ -287,4 +290,9 @@ void refreshLCD(byte livres, byte ocupadas){
     }
   }
 }
+
+
+
+
+
 
