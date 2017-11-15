@@ -1,3 +1,5 @@
+#define MQTT_SOCKET_TIMEOUT 5
+
 #include <LiquidCrystal.h>
 #include <SPI.h>
 #include <UIPEthernet.h>
@@ -12,7 +14,7 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xF1, 0xff }; // Endereço MAC utilizado 
 const byte rs = 9, en = 8, d4 = 6, d5 = 5, d6 = 4, d7 = 3; // Pinos de conexão do LCD
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-const byte TOTAL_VAGAS = 100; // Total de vagas do estacionamento
+#define TOTAL_VAGAS 100 // Total de vagas do estacionamento
 #define POSICAO_TEXTO1 10 // Posição de escrita do número de vagas livres/ocupadas
 #define POSICAO_TEXTO2 10
 
@@ -25,11 +27,11 @@ const byte TOTAL_VAGAS = 100; // Total de vagas do estacionamento
 
 #define NUM_PISCADAS 10 // Define quantas vezes o led de sinalização de comunicação MQTT irá piscar para cada mensagem
 
-byte blinkLed = LOW;
+/*byte blinkLed = LOW;
 byte contador = NUM_PISCADAS;
 AsyncDelay delay_blink;
 byte blinkLedStatus = LOW;
-#define BLINK_TIME 100
+#define BLINK_TIME 100*/
 
 #define CONNECTED 0x00
 #define DISCONNECTED 0x01
@@ -47,7 +49,7 @@ void callback(char *topic, byte *payload, unsigned int length);
 
 EthernetClient ethClient;
 
-// Dados do MQTT Cloud
+// Dados do MQTT Cloud/Mosquitto
 IPAddress server(192,168,3,186);
 #define MQTT_ID "kit36"
 #define MQTT_USER ""
@@ -62,32 +64,38 @@ void callback(char *topic, byte *payload, unsigned int length)
   delay_update.expire();
   delay_update.repeat();
   // Calcula o tamanho da string com o nome do tópico MQTT
-  int topicSize = 0;
-  for(int i = 0;topic[i]!=0; i++)
+  byte topicSize = 0;
+  for(byte i = 0;topic[i]!=0; i++)
+  {
     topicSize = i + 1;
-  
-  int valor = 0;
-  if(topicSize<=8){
-  // Converte os caracteres que indicam o número da vaga em inteiro
-  int i = 6;
-  valor = 0;
-  while(i < topicSize){
-    valor *= 10;
-    unsigned int aux = (int)topic[i]-48;
-    if (aux>9){
-      valor = TOTAL_VAGAS+50;
+    if(i>9){
+      topicSize = 255;
       break;
     }
-    valor += (int)topic[i]-48;
-    i++;
   }
-  valor--;
+  
+  byte valor = 0;
+  if(topicSize<=8){
+    // Converte os caracteres que indicam o número da vaga em inteiro
+    byte i = 6;
+    valor = 0;
+    while(i < topicSize){
+      valor *= 10;
+      byte aux = (int)topic[i]-48;
+      if (aux>9){
+        valor = TOTAL_VAGAS+50;
+        break;
+      }
+      valor += (int)topic[i]-48;
+      i++;
+    }
+    valor--;
   }
   else{
     valor = TOTAL_VAGAS;
   }
   // atualiza o status da vaga i
-  if(valor<TOTAL_VAGAS){
+  if(valor<TOTAL_VAGAS||topicSize>50){
     if(length==1){
       vagas[valor] = (int)payload[0]-48;
       linkStatus[valor] = 1;
@@ -98,10 +106,10 @@ void callback(char *topic, byte *payload, unsigned int length)
         linkStatus[valor] = 0;
       }
     }
-    blinkLed = HIGH;
+/*    blinkLed = HIGH;
     delay_blink.expire();
     delay_blink.repeat();
-    contador += NUM_PISCADAS;
+    contador = NUM_PISCADAS;*/
   }
 }
 
@@ -126,7 +134,7 @@ void setup() {
   digitalWrite(STATUSLEDYELLOW, LOW);
   digitalWrite(APAGALCD, LOW);
   
-  for (int i = 0; i < TOTAL_VAGAS; i++) {
+  for (byte i = 0; i < TOTAL_VAGAS; i++) {
     vagas[i] = 0;
     linkStatus[i] = 0;
   }
@@ -150,8 +158,9 @@ void setup() {
     digitalWrite(STATUSLEDGREEN, LOW);
     digitalWrite(STATUSLEDRED, HIGH);
   }
+  digitalWrite(STATUSLEDYELLOW, LOW);
   delay_update.start(UPDATE_TIME, AsyncDelay::MILLIS);
-  delay_blink.start(BLINK_TIME, AsyncDelay::MILLIS);
+//  delay_blink.start(BLINK_TIME, AsyncDelay::MILLIS);
   delay_reconnect.start(RECONNECT_TIME, AsyncDelay::MILLIS);
 }
 
@@ -207,7 +216,7 @@ void loop() {
       break;
   }
   
-  if(blinkLed){ // Rotina para piscar o led sempre que uma mensagem for publicada/recebida
+/*  if(blinkLed){ // Rotina para piscar o led sempre que uma mensagem for publicada/recebida
     if(contador<=0){
       blinkLed = LOW;
       contador = NUM_PISCADAS;
@@ -221,12 +230,12 @@ void loop() {
         contador--;
       }
     }
-  }
+  }*/
 }
 
 byte atualizaVagasLivres() {
   byte aux = 0;
-  for (int i = 0; i < TOTAL_VAGAS; i++) {
+  for (byte i = 0; i < TOTAL_VAGAS; i++) {
     aux += (vagas[i]*linkStatus[i]);
   }
   //if(aux!=qntVagasLivres){
@@ -237,7 +246,7 @@ byte atualizaVagasLivres() {
 
 byte atualizaVagasOcupadas(byte total) {
   byte aux = 0;
-  for (int i = 0; i < TOTAL_VAGAS; i++) {
+  for (byte i = 0; i < TOTAL_VAGAS; i++) {
     aux += (vagas[i]*linkStatus[i]);
   }
   aux = total - aux;
@@ -249,7 +258,7 @@ byte atualizaVagasOcupadas(byte total) {
 
 byte atualizaTotalVagas(){
   byte aux = 0;
-  for (int i = 0; i < TOTAL_VAGAS; i++) {
+  for (byte i = 0; i < TOTAL_VAGAS; i++) {
     aux += linkStatus[i];
   }
   //if(aux!=totalVagas){
@@ -260,7 +269,6 @@ byte atualizaTotalVagas(){
 
 void refreshLCD(byte livres, byte ocupadas){
   if(livres > 0){
-    
     lcd.setCursor(0, 0);
     lcd.clear();
     lcd.print("OCUPADAS: ");
@@ -284,6 +292,7 @@ void refreshLCD(byte livres, byte ocupadas){
       lcd.print("NAO HA VAGAS");
     }
     else{
+      
       lcd.clear();
       lcd.setCursor(0,0);
       lcd.print("SEM COMUNICAÇÃO");
